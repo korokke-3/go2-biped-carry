@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>説明資料 PAI最終課題</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  body { font-family: "Noto Sans CJK JP", sans-serif; font-size: 10pt; line-height: 1.6; color: #1d2430; }
+  h1 { font-size: 19pt; margin: 0 0 2mm 0; line-height: 1.35; }
+  .lead { color: #4a5568; margin-bottom: 4mm; }
+  h2 { font-size: 13pt; border-left: 5px solid #f0a020; padding-left: 3mm; margin: 6mm 0 2mm 0; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 3mm 0 1mm 0; page-break-after: avoid; }
+  p { margin: 1mm 0 2mm 0; }
+  ul { margin: 1mm 0 2mm 0; padding-left: 6mm; }
+  li { margin: 0.5mm 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.8pt; margin: 2mm 0 3mm 0; page-break-inside: avoid; }
+  th, td { border: 1px solid #c9d1dc; padding: 1mm 1.6mm; text-align: center; }
+  th { background: #eef2f7; }
+  td.l, th.l { text-align: left; }
+  .figs { display: flex; gap: 2mm; margin: 2mm 0; page-break-inside: avoid; }
+  .figs figure { margin: 0; flex: 1; }
+  .figs img { width: 100%; border-radius: 2px; }
+  figcaption { font-size: 8.5pt; color: #4a5568; text-align: center; }
+  .box { border: 1px solid #c9d1dc; background: #f7f9fc; padding: 2mm 3mm; margin: 2mm 0; page-break-inside: avoid; }
+  .flow { display: flex; align-items: stretch; gap: 1.5mm; margin: 2mm 0 3mm 0; page-break-inside: avoid; }
+  .flow div.s { flex: 1; border: 1.5px solid #2b4a75; border-radius: 3px; padding: 1.5mm; font-size: 8.5pt; background: #f3f6fb; }
+  .flow div.s b { display: block; color: #2b4a75; font-size: 9.2pt; }
+  .flow div.a { align-self: center; color: #f0a020; font-weight: bold; }
+  .small { font-size: 8.5pt; color: #4a5568; }
+  table.ft td, table.ft th { font-size: 8.3pt; }
+  table.ft td:first-child { width: 24%; }
+  table.kv td:first-child, table.kv th:first-child { width: 26mm; white-space: nowrap; }
+  code { font-family: "Noto Sans Mono CJK JP", monospace; font-size: 8.8pt; background: #eef2f7; padding: 0 1mm; }
+</style>
+</head>
+<body>
+
+<h1>後ろ足で立ち、前腕で荷物を受け止めて運ぶ四足ロボット<br><span style="font-size:12pt;font-weight:normal">Unitree Go2 × 強化学習 × 実機</span></h1>
+<div class="lead">PAI 最終課題 説明資料 ・ korokke3 ・ コード:<a href="https://github.com/korokke-3/go2-biped-carry">github.com/korokke-3/go2-biped-carry</a></div>
+
+<div class="figs">
+  <figure><img src="img/real_standup.jpg"><figcaption>四足から後ろ足で立つ</figcaption></figure>
+  <figure><img src="img/real_handover.jpg"><figcaption>人が荷物を前腕に載せる</figcaption></figure>
+  <figure><img src="img/real_turn.jpg"><figcaption>持ったまま旋回・移動</figcaption></figure>
+  <figure><img src="img/real_down.jpg"><figcaption>荷物を取ったら四足で休む</figcaption></figure>
+</div>
+<p class="small">実機の Unitree Go2 です。荷物は、500 mL の水 4 本を入れたカバンです。学習で使った荷物は箱と球だけで、カバンは学習していない形です。</p>
+
+<h2>1. 概要</h2>
+<p>四足ロボット Unitree Go2 が後ろ足だけで立ち、空いた前足を「腕」として使って、人から渡された荷物を前腕で受け止め、持ったままリモコンで指示した方向へ運ぶタスクを、強化学習で実現しました。荷物の重さや形はロボットに知らせません。方策が見るのは関節の角度・速さと IMU の履歴だけで、荷物が載ったことも、その重さも、体の動きから自分で読み取って姿勢を保ちます。</p>
+<p>Isaac Lab で 4096 台を並列に学習し、別の物理エンジン MuJoCo、実機と同じ通信のシミュレーターで確かめたあと、実機に載せました。実機では、後ろ足での立ち上がり 11 回、二足で約 11 分、荷物を持って約 3 分動かし、水 2 L 入りの、学習していない形のカバンを受け取って、持ったまま旋回・前後・横に移動しました。</p>
+
+<h2>2. 目的と課題設定</h2>
+<ul>
+  <li><b>創造性:</b>四足ロボットを「立って、腕で受け取る」使い方に変えます。前足をつかむ道具にせず、前腕に載せるだけで運ぶので、ハンドを足さずに荷物を扱えます。</li>
+  <li><b>実用性:</b>人が荷物を渡す場面を想定しています。荷物はそっと置かれることも、急に置かれることもあり、重さも形も前もって分かりません。そこで「重さと形を知らなくても倒れない」ことを最優先の目標にしました。</li>
+  <li><b>運用:</b>後ろ足で立ち続けると、後ろ足のモーターが熱くなります。そこで、荷物がないときは四足に下りて休めるように、二足と四足を切り替えられるようにしました。</li>
+</ul>
+
+<h2>3. システム構成</h2>
+<div class="flow">
+  <div class="s"><b>① 学習:Isaac Lab</b>PPO、4096 台並列。歩行 → 物を受け取る → 持って歩く、の順に段階的に学習</div>
+  <div class="a">→</div>
+  <div class="s"><b>② sim2sim:MuJoCo</b>別の物理エンジンで倒れないかを確認。実機で測った関節の摩擦・慣性も入れる</div>
+  <div class="a">→</div>
+  <div class="s"><b>③ 通信込みの試験</b>実機と同じ DDS 通信の MuJoCo で、制御プログラム・リモコン操作・安全装置を通しで試験</div>
+  <div class="a">→</div>
+  <div class="s"><b>④ 実機</b>unitree_sdk2 の低レベル制御、50 Hz で ONNX の方策を実行、500 Hz で PD 制御</div>
+</div>
+<table class="kv">
+  <tr><th class="l">項目</th><th class="l">内容</th></tr>
+  <tr><td class="l">方策の観測</td><td class="l">胴体の角速度、重力の向き、速度の指令、関節の角度・速さ、前回の行動、歩容の時計、四足か二足かのモード。5 ステップの履歴。荷物の情報は入れない</td></tr>
+  <tr><td class="l">価値関数の観測</td><td class="l">上に加えて、胴体の速度、関節の摩擦・慣性などの本当の値。非対称 actor-critic</td></tr>
+  <tr><td class="l">行動</td><td class="l">12 関節の目標角度。既定の姿勢からのずれ × 0.25。PD ゲイン 30 / 0.75</td></tr>
+  <tr><td class="l">ネットワーク</td><td class="l">方策と価値関数とも MLP 512-256-128。学習率は KL に合わせて自動で調整</td></tr>
+</table>
+
+<h2>4. 学習の設計</h2>
+<h3>4.1 二足歩行:公開実装を読み替える</h3>
+<p>Go2 の二足歩行の公開実装 go2_quad2hand は、<b>前足</b>で立つ逆立ち歩行です。報酬・PD ゲイン・ランダム化・歩容を項目ごとに比べた表を作り、立つ脚と自由な脚を入れ替えて、<b>後ろ足</b>で立つ形に読み替えました。比較表は <code>go2_carry/refwalk_env_cfg.py</code> の冒頭にあります。歩容は周期 0.4 秒で、止まっていても足踏みします。この歩容が、荷物を受け止めても倒れない安定の土台になりました。6 章の表の 1 行目を見てください。</p>
+<h3>4.2 物を受け取る:カリキュラム</h3>
+<ul>
+  <li><b>補助の力:</b>最初は胴体に水平のばねをかけて倒れにくくし、落とす割合が下がったら弱めて 0 にします。Yu et al. 2018 の方法です。</li>
+  <li><b>荷物:</b>重さ 0.3 → 2 kg、直径 15〜46 cm の箱と球、硬さ 3 段階。物を落とす割合に応じて自動で難しくします。</li>
+  <li><b>歩く指示:</b>持っている間の速度の指示を 0 → 1 倍に広げます。立って受け取る段階から、持って歩く段階へ進みます。</li>
+  <li><b>受け取る形:</b>待つときの腕の形を、胴体を固定した試験で選びました。大きい球を載せやすいよう、腕を前に出してハの字を緩めた形です。</li>
+</ul>
+<h3>4.3 現実とのずれに強くする:ドメインランダム化</h3>
+<p>床の摩擦、胴体の重さ −1〜+2 kg、重心、押し、PD ゲイン、足のねじれの摩擦、モーターの強さ ×0.8〜1.5、実機の Go2 で測った関節の摩擦と膝の慣性をランダムに変えます。加えて、左右反転のデータ拡張で左右対称な歩き方にしました。どれを入れたかは、6 章の失敗から決めています。</p>
+<h3>4.4 二足 ↔ 四足の切り替え</h3>
+<p>参考実装と同じく、1 つの方策に四足か二足かのモードを観測として与え、モードごとに報酬を切り替えて学習しました。二足で立ち上がる動きは方策が覚えました。四足に下りる動きは覚えなかったので、決めた動きで補っています。</p>
+
+<h2>5. 実機で動かすまでの工夫</h2>
+<ul>
+  <li><b>制御プログラム <code>deploy/go2_real.py</code>:</b>組み込みの制御を止めて、低レベル制御に切り替えます。select で非常停止を確かめ、start で四足で立ち、A か十字キー上で二足、十字キー下で四足に戻ります。</li>
+  <li><b>安全装置:</b>胴体の傾き 50°、関節の可動域、0.1 秒の通信の途絶で脱力。モーターが 70 °C で自動で四足に下ります。目標角度の 1 ステップの変化量も制限します。</li>
+  <li><b>実機と同じ通信のシミュレーター <code>deploy/sim_dds.py</code>:</b>実機と同じ DDS のメッセージで動く MuJoCo に、リモコン操作の台本を送り、制御プログラムをそのまま通しで試験しました。三足の別の方策を実機で初めて動かしたときに見つかった「止めたあと再開すると崩れる」不具合も、ここで再現して直しました。</li>
+  <li><b>撮影用の自動デモ:</b>Y ボタン 1 つで、旋回・前後・横移動を順に行う決まった指示を送ります。行って戻るので、狭い場所でも元の位置に戻ります。</li>
+</ul>
+
+<h2>6. 失敗と対策</h2>
+<p>何度も失敗し、原因を突き止めて乗り越えました。主なものを表にまとめます。</p>
+<table class="ft">
+  <tr><th class="l">失敗</th><th class="l">原因</th><th class="l">対策</th><th class="l">結果</th></tr>
+  <tr><td class="l">物を持つと、膝をついて体を支える</td><td class="l">止まるときは両足をつく、独自の歩容</td><td class="l">常に足踏みする参考実装の歩容に合わせ、作り直した</td><td class="l">2 kg を持って立つとき、膝をつく割合 94% → 0%</td></tr>
+  <tr><td class="l">後ろ足の負荷の罰則を、膝を伸ばし切ってすり抜けた</td><td class="l">可動域の端に体重を預けると、トルクがほぼ 0 になる</td><td class="l">可動域の端に近づくことに罰則を足した</td><td class="l">膝のトルクの2乗平均 19.9 → 11 Nm。MuJoCo でも倒れない</td></tr>
+  <tr><td class="l">MuJoCo で旋回が指示の半分</td><td class="l">足のねじれの摩擦が、学習になかった</td><td class="l">ねじれの摩擦をランダム化</td><td class="l">MuJoCo の旋回 55% → 81%</td></tr>
+  <tr><td class="l">MuJoCo で、立ち上がった直後に後ろへ倒れる</td><td class="l">モーターの特性と、実測の膝の慣性が学習の範囲の外</td><td class="l">モーターの強さと、実機で測った関節の値をランダム化</td><td class="l">実測の関節を入れても倒れない</td></tr>
+  <tr><td class="l">四足に下りる動きを、方策が覚えない</td><td class="l">4 通りの設定・約 2600 回の学習でも、立った姿勢から抜け出さない</td><td class="l">関節を 0.5 秒で四足の姿勢へ動かす、決めた動きで補った</td><td class="l">MuJoCo で 36 回中 36 回成功、実機でも成功</td></tr>
+  <tr><td class="l">実機で、指示なしでも前へ進む</td><td class="l">立っているときの傾きが、シミュレーターより約 2.5° 前寄り。MuJoCo で 3° のずれが 0.3 m/s の流れになると確認</td><td class="l">方策に渡す傾きを補正。立ってから 3 秒かけて入れる</td><td class="l">流れはほぼ止まった。少し前後に揺れる癖は残る</td></tr>
+  <tr><td class="l">実機で、急に後退へ切り替えて転倒</td><td class="l">学習では指示が 10 秒ごとにしか変わらない</td><td class="l">前進の上限を後退と同じ 0.64 m/s に下げた</td><td class="l">以後、急な切り替えによる転倒はない</td></tr>
+</table>
+
+<h2>7. 結果</h2>
+<h3>7.1 シミュレーション:Isaac Lab で荷物を落とした割合</h3>
+<p class="small">方策は HoldBall c10 です。決まった大きさの箱 8 種類と球 3 種類を、条件ごとに 192 台で評価しました。1 種類あたり 16〜18 台です。「広い箱」は前腕の両方にまたがる箱 b0〜b3 です。小さい箱 b5・b7 は、約 22 cm の腕の間隔より狭い箱です。実機に載せた方策 HoldBall-Switch c1 は、この c10 を実測の関節と切り替えで追加学習したもので、物を持つ成績は c10 とほぼ同じです。</p>
+<table>
+  <tr><th class="l">条件:荷物 2 kg</th><th>転倒</th><th>広い箱 b0–b3</th><th>球 30 cm</th><th>球 36 cm</th><th>球 44 cm</th><th>小さい箱 b5 / b7</th></tr>
+  <tr><td class="l">そっと置く</td><td>0%</td><td>0%</td><td>0%</td><td>0%</td><td>6%</td><td>89 / 83%</td></tr>
+  <tr><td class="l">1.5 秒かけて渡す</td><td>0%</td><td>3%</td><td>0%</td><td>0%</td><td>6%</td><td>78 / 72%</td></tr>
+  <tr><td class="l">10 cm の高さから落とす</td><td>0%</td><td>1%</td><td>0%</td><td>0%</td><td>6%</td><td>78 / 100%</td></tr>
+  <tr><td class="l">急に取り去る</td><td>0%</td><td>0%</td><td>0%</td><td>0%</td><td>0%</td><td>83 / 61%</td></tr>
+  <tr><td class="l">3 kg / 4 kg / 5 kg をそっと置く</td><td>0 / 0 / 0%</td><td>0 / 0 / 1%</td><td>0 / 25 / 81%</td><td>0 / 0 / 19%</td><td>0 / 25 / 50%</td><td>94–100%</td></tr>
+  <tr><td class="l">持って前進 0.3 / 0.6 / 0.9 m/s</td><td>0%</td><td>1 / 1 / 0%</td><td>0%</td><td>0%</td><td>6 / 0 / 0%</td><td>67–94%</td></tr>
+  <tr><td class="l">持って後退 0.3・横 0.2・旋回 ±0.5</td><td>0%</td><td>0–1%</td><td>0%</td><td>0%</td><td>0–12%</td><td>78–100%</td></tr>
+</table>
+<p>実測の関節の値を入れた MuJoCo でも倒れず、指示の方向へ歩けました。前進の指示 0.4 m/s に対して 0.27 m/s です。</p>
+
+<div class="figs">
+  <figure><img src="img/sim_isaac.jpg"><figcaption>Isaac Lab:箱と球を前腕に置く評価</figcaption></figure>
+  <figure><img src="img/sim_carry.jpg"><figcaption>持ったまま歩く</figcaption></figure>
+  <figure><img src="img/sim_mujoco_12.3.jpg"><figcaption>MuJoCo:決めた動きで四足に下りる</figcaption></figure>
+</div>
+
+<h3>7.2 実機:2026-10-31</h3>
+<table class="kv">
+  <tr><th class="l">項目</th><th class="l">結果</th></tr>
+  <tr><td class="l">二足で立つ・歩く</td><td class="l">後ろ足での立ち上がり 11 回、二足で合計約 11 分。リモコンで前後・横・旋回</td></tr>
+  <tr><td class="l">荷物</td><td class="l">水 2 L 入りの、学習していない形のカバンを受け取り、合計約 3 分持った。持ったまま旋回・前後・横移動</td></tr>
+  <tr><td class="l">荷物による揺れ</td><td class="l">止まって立つときの傾きの標準偏差は、前後 0.49° → 0.72°、左右 0.28° → 0.40°。平均の傾きは変わらない</td></tr>
+  <tr><td class="l">切り替え</td><td class="l">十字キーで二足 ↔ 四足。荷物を取ってから四足に下りて休む</td></tr>
+  <tr><td class="l">モーターの温度</td><td class="l">最高 46 °C。自動で四足に下りる 70 °C には届かない</td></tr>
+</table>
+
+<h2>8. 考察と今後</h2>
+<ul>
+  <li><b>学習していない形でも持てた理由:</b>荷物の情報を観測に入れず、大きさ・重さ・硬さ・置き方を広くランダムにしたので、方策は「前腕に何かが載ったときの体の動き」から反応することを覚えたと考えます。</li>
+  <li><b>小さい物は落とす:</b>腕の間隔より狭い物は、前腕の間から抜けます。表の b5 / b7 です。挟んで持つ動きが次の課題です。</li>
+  <li><b>止まっていても前後に揺れる:</b>方策は「その場の位置」を知らないため、傾きのわずかなずれで歩き出します。その場に留まる学習や、脚の動きから位置を推定して戻す仕組みが必要です。</li>
+  <li><b>発熱:</b>二足は後ろ足のモーターに負荷が集中します。止まっているときに両足で立つ姿勢や、温度を見て四足で休む運用を、実機の温度の上がり方を測って決める予定です。</li>
+  <li><b>反省:</b>地面の接触センサーの指定の誤りで「転倒 0%」が測れていなかった時期があり、途中のチェックポイントを評価せずに学習中の指標だけを信じて悪化に気づかなかったこともありました。区切りごとに決まった条件で評価し、別のシミュレーターでも確かめる手順に改めました。</li>
+</ul>
+
+<h2>9. 使用したもの・参考</h2>
+<ul class="small">
+  <li>Isaac Sim 5.1 / Isaac Lab 2.3 / rsl_rl 3.0.1 / unitree_rl_lab / MuJoCo / unitree_sdk2_python / ONNX Runtime を使いました。</li>
+  <li>go2_quad2hand, Sang-SC, BSD-3 ライセンス:二足歩行の報酬・歩容・ランダム化の設定を参考にしました。</li>
+  <li>W. Yu et al., "Learning Symmetric and Low-Energy Locomotion," SIGGRAPH 2018:補助の力のカリキュラムと左右対称の手法を参考にしました。</li>
+  <li>そのほかの関連研究は <code>RELATED_WORK.md</code> にあります。</li>
+  <li>主なコード:<code>go2_carry/</code> は環境・報酬・カリキュラム、<code>scripts/</code> は学習・評価、<code>deploy/</code> は実機の制御プログラムと検証用のシミュレーターです。</li>
+</ul>
+
+</body>
+</html>

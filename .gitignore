@@ -1,0 +1,13 @@
+__pycache__/
+logs/
+*.pt
+!models/*.pt
+videos/*.mp4
+!videos/demo*.mp4
+outputs/
+*.onnx
+CLAUDE.md
+deploy/videos/
+deploy/real_logs/
+最終課題*.pdf
+real_joints_local.json
